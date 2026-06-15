@@ -9,6 +9,7 @@ from structlog.contextvars import bind_contextvars
 
 from .agent import LabAgent
 from .alerts import evaluate as evaluate_alerts, status as alert_status
+from .audit import record as audit_record
 from .dashboard import router as dashboard_router
 from .incidents import disable, enable, status
 from .logging_config import configure_logging, get_logger
@@ -57,6 +58,10 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         model=agent.model,
         env=os.getenv("APP_ENV", "dev"),
     )
+    
+    has_pii = any(p in body.message.lower() for p in ["@", "credit", "card", "phone", "passport", "cccd"])
+    if has_pii:
+        audit_record("pii_request", actor=body.user_id, detail={"feature": body.feature, "session_id": body.session_id})
     
     log.info(
         "request_received",
@@ -117,8 +122,10 @@ async def enable_incident(name: str) -> JSONResponse:
     try:
         enable(name)
         log.warning("incident_enabled", service="control", payload={"name": name})
+        audit_record("incident_enable", actor="operator", detail={"incident": name})
         return JSONResponse({"ok": True, "incidents": status()})
     except KeyError as exc:
+        audit_record("incident_enable", actor="operator", detail={"incident": name}, outcome="failed")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
@@ -127,6 +134,8 @@ async def disable_incident(name: str) -> JSONResponse:
     try:
         disable(name)
         log.warning("incident_disabled", service="control", payload={"name": name})
+        audit_record("incident_disable", actor="operator", detail={"incident": name})
         return JSONResponse({"ok": True, "incidents": status()})
     except KeyError as exc:
+        audit_record("incident_disable", actor="operator", detail={"incident": name}, outcome="failed")
         raise HTTPException(status_code=404, detail=str(exc)) from exc
