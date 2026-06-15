@@ -2,23 +2,28 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from structlog.contextvars import bind_contextvars
 
 from .agent import LabAgent
+from .alerts import evaluate as evaluate_alerts, status as alert_status
+from .dashboard import router as dashboard_router
 from .incidents import disable, enable, status
 from .logging_config import configure_logging, get_logger
 from .metrics import record_error, snapshot
 from .middleware import CorrelationIdMiddleware
 from .pii import hash_user_id, summarize_text
 from .schemas import ChatRequest, ChatResponse
-from .tracing import tracing_enabled
+from .tracing import get_client, observe, tracing_enabled
 
+load_dotenv()
 configure_logging()
 log = get_logger()
 app = FastAPI(title="Day 13 Observability Lab")
 app.add_middleware(CorrelationIdMiddleware)
+app.include_router(dashboard_router)
 agent = LabAgent()
 
 
@@ -43,9 +48,15 @@ async def metrics() -> dict:
 
 
 @app.post("/chat", response_model=ChatResponse)
+@observe()
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
-    # TODO: Enrich logs with request context (user_id_hash, session_id, feature, model, env)
-    # bind_contextvars(...)
+    bind_contextvars(
+        user_id_hash=hash_user_id(body.user_id),
+        session_id=body.session_id,
+        feature=body.feature,
+        model=agent.model,
+        env=os.getenv("APP_ENV", "dev"),
+    )
     
     log.info(
         "request_received",
@@ -87,6 +98,18 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             payload={"detail": str(exc), "message_preview": summarize_text(body.message)},
         )
         raise HTTPException(status_code=500, detail=error_type) from exc
+    finally:
+        get_client().flush()
+
+
+@app.get("/alerts")
+async def alerts() -> list[dict]:
+    return evaluate_alerts()
+
+
+@app.get("/alerts/fired")
+async def alerts_fired() -> dict:
+    return alert_status()
 
 
 @app.post("/incidents/{name}/enable")

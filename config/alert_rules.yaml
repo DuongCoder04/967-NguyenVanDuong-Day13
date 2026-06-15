@@ -1,19 +1,36 @@
 alerts:
   - name: high_latency_p95
+    description: Tail latency exceeds SLO objective
     severity: P2
-    condition: latency_p95_ms > 5000 for 30m
+    condition: latency_p95_ms > 3000 for 30m
     type: symptom-based
     owner: team-oncall
+    slo_ref: latency_p95_ms
     runbook: docs/alerts.md#1-high-latency-p95
+
   - name: high_error_rate
+    description: Error rate above SLO threshold
     severity: P1
-    condition: error_rate_pct > 5 for 5m
+    condition: error_rate_pct > 2 for 5m
     type: symptom-based
     owner: team-oncall
+    slo_ref: error_rate_pct
     runbook: docs/alerts.md#2-high-error-rate
+
   - name: cost_budget_spike
+    description: Cost spike anomaly detected
     severity: P2
-    condition: hourly_cost_usd > 2x_baseline for 15m
+    condition: cost_per_request_usd > 0.005 for 15m
     type: symptom-based
     owner: finops-owner
+    slo_ref: daily_cost_usd
     runbook: docs/alerts.md#3-cost-budget-spike
+
+  - name: quality_drop
+    description: Average quality score below SLO
+    severity: P2
+    condition: quality_score_avg < 0.5 for 10m
+    type: symptom-based
+    owner: team-oncall
+    slo_ref: quality_score_avg
+    runbook: docs/alerts.md#4-quality-drop

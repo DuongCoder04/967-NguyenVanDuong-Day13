@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import Counter
 from statistics import mean
 
@@ -10,6 +11,7 @@ REQUEST_TOKENS_OUT: list[int] = []
 ERRORS: Counter[str] = Counter()
 TRAFFIC: int = 0
 QUALITY_SCORES: list[float] = []
+HISTORY: list[dict] = []
 
 
 def record_request(latency_ms: int, cost_usd: float, tokens_in: int, tokens_out: int, quality_score: float) -> None:
@@ -20,11 +22,22 @@ def record_request(latency_ms: int, cost_usd: float, tokens_in: int, tokens_out:
     REQUEST_TOKENS_IN.append(tokens_in)
     REQUEST_TOKENS_OUT.append(tokens_out)
     QUALITY_SCORES.append(quality_score)
-
+    HISTORY.append({
+        "ts": time.time(),
+        "traffic": TRAFFIC,
+        "latency_ms": latency_ms,
+        "cost_usd": cost_usd,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "quality_score": quality_score,
+        "error_breakdown": dict(ERRORS),
+    })
 
 
 def record_error(error_type: str) -> None:
     ERRORS[error_type] += 1
+    if HISTORY:
+        HISTORY[-1]["error_breakdown"] = dict(ERRORS)
 
 
 
@@ -50,3 +63,16 @@ def snapshot() -> dict:
         "error_breakdown": dict(ERRORS),
         "quality_avg": round(mean(QUALITY_SCORES), 4) if QUALITY_SCORES else 0.0,
     }
+
+
+def history() -> list[dict]:
+    result = []
+    for i in range(len(HISTORY)):
+        slice_latencies = [h["latency_ms"] for h in HISTORY[: i + 1]]
+        result.append({
+            **HISTORY[i],
+            "latency_p50": percentile(slice_latencies, 50),
+            "latency_p95": percentile(slice_latencies, 95),
+            "latency_p99": percentile(slice_latencies, 99),
+        })
+    return result

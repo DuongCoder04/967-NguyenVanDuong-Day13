@@ -28,13 +28,26 @@
 
 ## 3. Cost budget spike
 - Severity: P2
-- Trigger: `hourly_cost_usd > 2x_baseline for 15m`
+- Trigger: `cost_per_request_usd > 0.005 for 15m`
 - Impact: burn rate exceeds budget
 - First checks:
-  1. Split traces by feature and model
-  2. Compare tokens_in/tokens_out
-  3. Check if `cost_spike` incident was enabled
+   1. Split traces by feature and model
+   2. Compare tokens_in/tokens_out
+   3. Check if `cost_spike` incident was enabled
 - Mitigation:
-  - shorten prompts
-  - route easy requests to cheaper model
-  - apply prompt cache
+   - shorten prompts
+   - route easy requests to cheaper model
+   - apply prompt cache
+
+## 4. Quality drop
+- Severity: P2
+- Trigger: `quality_score_avg < 0.5 for 10m`
+- Impact: user satisfaction degrades
+- First checks:
+   1. Inspect recent traces by feature
+   2. Compare answer length and context usage
+   3. Check if tool_fail incident is enabled
+- Mitigation:
+   - verify retrieval relevance
+   - revert model to previous version
+   - increase context window

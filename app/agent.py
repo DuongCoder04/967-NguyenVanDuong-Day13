@@ -7,7 +7,7 @@ from . import metrics
 from .mock_llm import FakeLLM
 from .mock_rag import retrieve
 from .pii import hash_user_id, summarize_text
-from .tracing import langfuse_context, observe
+from .tracing import get_client, observe, propagate_attributes
 
 
 @dataclass
@@ -35,12 +35,12 @@ class LabAgent:
         latency_ms = int((time.perf_counter() - started) * 1000)
         cost_usd = self._estimate_cost(response.usage.input_tokens, response.usage.output_tokens)
 
-        langfuse_context.update_current_trace(
+        propagate_attributes(
             user_id=hash_user_id(user_id),
             session_id=session_id,
             tags=["lab", feature, self.model],
         )
-        langfuse_context.update_current_observation(
+        get_client().update_current_generation(
             metadata={"doc_count": len(docs), "query_preview": summarize_text(message)},
             usage_details={"input": response.usage.input_tokens, "output": response.usage.output_tokens},
         )
